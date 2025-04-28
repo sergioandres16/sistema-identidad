@@ -160,3 +160,4 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
             throw new RuntimeException("Failed to generate QR code", e);
         }
     }
+}
