@@ -48,13 +48,136 @@ public class AccessLogServiceImpl implements AccessLogService {
         this.notificationService = notificationService;
     }
 
+    // ------------------------------------------------------------------------
+    //  MÉTODO MODIFICADO: cambio de estado automático al escanear el QR
+    // ------------------------------------------------------------------------
+    @Override
+    @Transactional
+    public AccessLog processQrScan(String qrToken, Long zoneId,
+                                   String scannerId, String scannerLocation) {
+
+        // 1) Validar token → obtener userId
+        Long userId = qrGeneratorService.validateQrToken(qrToken);
+        if (userId == null) {
+            return logAccess(null, zoneId, false, "SCAN",
+                    scannerId, scannerLocation, "Invalid or expired QR code");
+        }
+
+        // 2) Cargar usuario y estado original
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found with id: " + userId));
+
+        UserStatus originalStatus = user.getStatus();  // puede ser null
+        String originalName = originalStatus != null ? originalStatus.getName() : null;
+
+        // 3) Verificaciones de negocio
+        boolean accessGranted = true;
+        String reasonDenied = null;
+
+        // 3.1) Deuda primero: si tiene deuda lo marcamos (y quizá negamos acceso)
+        if (user.getHasDebt() != null && user.getHasDebt()
+                && user.getMembershipType() != null && !user.getMembershipType().isEmpty()) {
+
+            UserStatus debtStatus = userStatusRepository.findByName(UserStatus.DEBT)
+                    .orElseThrow(() -> new ResourceNotFoundException("Status DEBT not found"));
+
+            if (originalStatus == null || !debtStatus.getId().equals(originalStatus.getId())) {
+                user.setStatus(debtStatus);
+                userRepository.save(user);
+                notificationService.sendStatusChangeNotification(
+                        userId, originalName, UserStatus.DEBT);
+            }
+            accessGranted = false;
+            reasonDenied = "User has outstanding debt";
+        }
+
+        // 3.2) Estado INACTIVE o SUSPENDED
+        if (accessGranted && originalStatus != null) {
+            String s = originalName;
+            if (UserStatus.INACTIVE.equals(s) || UserStatus.SUSPENDED.equals(s)) {
+                accessGranted = false;
+                reasonDenied = "User status: " + s;
+            }
+        }
+
+        // 3.3) Permisos de zona y franja horaria
+        if (accessGranted && zoneId != null && user.getAccessProfile() != null) {
+            boolean hasAccess = user.getAccessProfile().getAllowedZones().stream()
+                    .anyMatch(z -> z.getId().equals(zoneId));
+
+            if (!hasAccess) {
+                accessGranted = false;
+                reasonDenied = "No access rights to this zone";
+            } else {
+                LocalDateTime now = LocalDateTime.now();
+                boolean timeAllowed = user.getAccessProfile().getTimeRestrictions().stream()
+                        .anyMatch(tr -> tr.getDayOfWeek() == now.getDayOfWeek()
+                                && tr.getStartTime().isBefore(now.toLocalTime())
+                                && tr.getEndTime().isAfter(now.toLocalTime()));
+                if (!timeAllowed) {
+                    accessGranted = false;
+                    reasonDenied = "Outside of allowed time period";
+                }
+            }
+        }
+
+        // 4) Reglas de promoción a ACTIVE si todo fue OK
+        if (accessGranted) {
+            // 4.1) PENDING -> ACTIVE
+            if (UserStatus.PENDING.equals(originalName)) {
+                promoteToActive(user, originalName);
+            }
+            // 4.2) EXPIRED -> ACTIVE si renovó
+            else if (UserStatus.EXPIRED.equals(originalName)
+                    && user.getMembershipExpiry() != null
+                    && user.getMembershipExpiry().isAfter(LocalDateTime.now())) {
+                promoteToActive(user, originalName);
+            }
+        }
+
+        // 5) Registrar intento de acceso
+        AccessLog accessLog = logAccess(userId, zoneId, accessGranted, "SCAN",
+                scannerId, scannerLocation, reasonDenied);
+
+        // 5.1) Si hubo cambio de estado, reflejarlo en el log
+        if (user.getStatus() != null
+                && (originalStatus == null
+                || !user.getStatus().getId().equals(originalStatus.getId()))) {
+
+            accessLog.setPreviousStatus(originalName);
+            accessLog.setUpdatedStatus(user.getStatus().getName());
+        }
+
+        // 5.2) Notificar acceso denegado
+        if (!accessGranted) {
+            notificationService.sendAccessDeniedNotification(
+                    userId, accessLog.getId(), reasonDenied);
+        }
+
+        return accessLogRepository.save(accessLog);
+    }
+
+    // ------------------------------------------------------------------------
+    //  Helpers
+    // ------------------------------------------------------------------------
+    private void promoteToActive(User user, String previousStatusName) {
+        UserStatus activeStatus = userStatusRepository.findByName(UserStatus.ACTIVE)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Status ACTIVE not found"));
+        user.setStatus(activeStatus);
+        userRepository.save(user);
+        notificationService.sendStatusChangeNotification(
+                user.getId(), previousStatusName, UserStatus.ACTIVE);
+    }
+
     @Override
     @Transactional
     public AccessLog logAccess(Long userId, Long zoneId, boolean accessGranted, String accessType,
                                String scannerId, String scannerLocation, String reasonDenied) {
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+        User user = userId != null ? userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId))
+                : null;
 
         AccessZone zone = null;
         if (zoneId != null) {
@@ -72,85 +195,11 @@ public class AccessLogServiceImpl implements AccessLogService {
         accessLog.setScannerLocation(scannerLocation);
         accessLog.setReasonDenied(reasonDenied);
 
-        if (user.getStatus() != null) {
+        if (user != null && user.getStatus() != null) {
             accessLog.setPreviousStatus(user.getStatus().getName());
         }
 
         return accessLogRepository.save(accessLog);
-    }
-
-    @Override
-    @Transactional
-    public AccessLog processQrScan(String qrToken, Long zoneId, String scannerId, String scannerLocation) {
-        // Validate QR token to get user ID
-        Long userId = qrGeneratorService.validateQrToken(qrToken);
-
-        if (userId == null) {
-            // QR token is invalid or expired
-            return logAccess(null, zoneId, false, "SCAN", scannerId, scannerLocation, "Invalid or expired QR code");
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
-
-        // Check if user is allowed to access the zone
-        boolean accessGranted = true;
-        String reasonDenied = null;
-
-        // Check user status
-        if (user.getStatus() != null) {
-            String statusName = user.getStatus().getName();
-            if (statusName.equals(UserStatus.INACTIVE) ||
-                    statusName.equals(UserStatus.SUSPENDED)) {
-                accessGranted = false;
-                reasonDenied = "User status: " + statusName;
-            }
-        }
-
-        // Check if user has debt (for club members)
-        if (accessGranted && user.getHasDebt() != null && user.getHasDebt() &&
-                user.getMembershipType() != null && !user.getMembershipType().isEmpty()) {
-            accessGranted = false;
-            reasonDenied = "User has outstanding debt";
-        }
-
-        // Check if the user has access to this zone
-        if (accessGranted && zoneId != null && user.getAccessProfile() != null) {
-            boolean hasAccess = user.getAccessProfile().getAllowedZones().stream()
-                    .anyMatch(zone -> zone.getId().equals(zoneId));
-
-            if (!hasAccess) {
-                accessGranted = false;
-                reasonDenied = "No access rights to this zone";
-            }
-
-            // Check time restrictions
-            if (hasAccess) {
-                LocalDateTime now = LocalDateTime.now();
-                boolean timeAllowed = user.getAccessProfile().getTimeRestrictions().stream()
-                        .anyMatch(tr ->
-                                tr.getDayOfWeek() == now.getDayOfWeek() &&
-                                        tr.getStartTime().isBefore(now.toLocalTime()) &&
-                                        tr.getEndTime().isAfter(now.toLocalTime())
-                        );
-
-                if (!timeAllowed) {
-                    accessGranted = false;
-                    reasonDenied = "Outside of allowed time period";
-                }
-            }
-        }
-
-        // Log the access attempt
-        AccessLog accessLog = logAccess(userId, zoneId, accessGranted, "SCAN",
-                scannerId, scannerLocation, reasonDenied);
-
-        // Send notification if access is denied
-        if (!accessGranted) {
-            notificationService.sendAccessDeniedNotification(userId, accessLog.getId(), reasonDenied);
-        }
-
-        return accessLog;
     }
 
     @Override

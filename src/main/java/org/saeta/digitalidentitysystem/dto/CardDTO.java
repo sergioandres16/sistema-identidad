@@ -12,6 +12,7 @@ public class CardDTO {
     private String lastName;
     private byte[] profilePhoto;
     private String cardNumber;
+    private String qrToken;
     private LocalDateTime issueDate;
     private LocalDateTime expiryDate;
     private Boolean isActive;

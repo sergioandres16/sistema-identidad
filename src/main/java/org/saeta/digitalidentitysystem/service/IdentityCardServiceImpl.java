@@ -187,11 +187,14 @@ public class IdentityCardServiceImpl implements IdentityCardService {
         cardDTO.setExpiryDate(card.getExpiryDate());
         cardDTO.setIsActive(card.getIsActive());
 
-        // Generate QR code
+        // 1️⃣  Imagen PNG del QR en Base-64 (la que el front mostrará)
         String qrCode = qrGeneratorService.generateQrCodeAsBase64(card.getUser().getId());
         cardDTO.setQrCodeBase64(qrCode);
 
-        // Set user details
+        // 2️⃣  👉 NUEVA línea: token “crudo” que va dentro del QR
+        cardDTO.setQrToken(card.getLastQrCode());
+
+        // ---------- datos del usuario ----------
         User user = card.getUser();
         cardDTO.setUserId(user.getId());
         cardDTO.setFirstName(user.getFirstName());
@@ -203,7 +206,6 @@ public class IdentityCardServiceImpl implements IdentityCardService {
             cardDTO.setStatusColor(user.getStatus().getStatusColor());
         }
 
-        // Set role name (assuming first role is primary)
         if (user.getRoles() != null && !user.getRoles().isEmpty()) {
             cardDTO.setRole(user.getRoles().iterator().next().getName());
         }
