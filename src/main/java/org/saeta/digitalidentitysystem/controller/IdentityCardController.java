@@ -2,7 +2,10 @@ package org.saeta.digitalidentitysystem.controller;
 
 import org.saeta.digitalidentitysystem.dto.CardDTO;
 import org.saeta.digitalidentitysystem.entity.IdentityCard;
+import org.saeta.digitalidentitysystem.exception.ResourceNotFoundException;
 import org.saeta.digitalidentitysystem.service.IdentityCardService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/cards")
 public class IdentityCardController {
 
+    private static final Logger logger = LoggerFactory.getLogger(IdentityCardController.class);
     private final IdentityCardService identityCardService;
 
     @Autowired
@@ -65,8 +69,20 @@ public class IdentityCardController {
     @GetMapping("/{id}/renew-qr")
     @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
     public ResponseEntity<String> renewQrCode(@PathVariable Long id) {
-        String qrBase64 = identityCardService.renewQrCode(id);
-        return new ResponseEntity<>(qrBase64, HttpStatus.OK);
+        try {
+            logger.info("Solicitud de renovación de QR para la tarjeta ID: {}", id);
+            String qrBase64 = identityCardService.renewQrCode(id);
+            return new ResponseEntity<>(qrBase64, HttpStatus.OK);
+        } catch (ResourceNotFoundException e) {
+            logger.error("Error al renovar QR: tarjeta no encontrada con ID: {}", id);
+            return new ResponseEntity<>("Tarjeta no encontrada: " + e.getMessage(), HttpStatus.NOT_FOUND);
+        } catch (IllegalStateException e) {
+            logger.error("Error al renovar QR: estado ilegal para la tarjeta ID: {}", id);
+            return new ResponseEntity<>("No se puede renovar: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            logger.error("Error inesperado al renovar QR para tarjeta ID: {}", id, e);
+            return new ResponseEntity<>("Error interno: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @GetMapping("/{id}/validate")

@@ -22,7 +22,6 @@ public class Role {
     @Column
     private String description;
 
-    // Constructor with role name
     public Role(String name) {
         this.name = name;
     }

@@ -42,7 +42,6 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public User saveUser(User user) {
-        // Encode password before saving
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         return userRepository.save(user);
     }
@@ -53,18 +52,15 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 
-        // Update user details
         user.setFirstName(userDetails.getFirstName());
         user.setLastName(userDetails.getLastName());
         user.setEmail(userDetails.getEmail());
         user.setPhoneNumber(userDetails.getPhoneNumber());
 
-        // Only update password if provided in user details
         if (userDetails.getPassword() != null && !userDetails.getPassword().isEmpty()) {
             user.setPassword(passwordEncoder.encode(userDetails.getPassword()));
         }
 
-        // Update university specific attributes if provided
         if (userDetails.getStudentCode() != null) {
             user.setStudentCode(userDetails.getStudentCode());
         }
@@ -72,7 +68,6 @@ public class UserServiceImpl implements UserService {
             user.setFaculty(userDetails.getFaculty());
         }
 
-        // Update club specific attributes if provided
         if (userDetails.getMembershipType() != null) {
             user.setMembershipType(userDetails.getMembershipType());
         }
@@ -83,7 +78,6 @@ public class UserServiceImpl implements UserService {
             user.setHasDebt(userDetails.getHasDebt());
         }
 
-        // Update profile photo if provided
         if (userDetails.getProfilePhoto() != null) {
             user.setProfilePhoto(userDetails.getProfilePhoto());
         }

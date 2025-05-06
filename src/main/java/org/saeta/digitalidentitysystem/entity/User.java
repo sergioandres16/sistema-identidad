@@ -70,14 +70,12 @@ public class User {
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
-    // For University specific attributes
     @Column(name = "student_code")
     private String studentCode;
 
     @Column(name = "faculty")
     private String faculty;
 
-    // For Club specific attributes
     @Column(name = "membership_type")
     private String membershipType;
 

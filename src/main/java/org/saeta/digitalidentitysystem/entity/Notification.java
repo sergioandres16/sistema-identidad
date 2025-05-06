@@ -29,7 +29,7 @@ public class Notification {
     private String message;
 
     @Column(name = "notification_type")
-    private String notificationType; // SYSTEM, ACCESS, DEBT, INFO
+    private String notificationType;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

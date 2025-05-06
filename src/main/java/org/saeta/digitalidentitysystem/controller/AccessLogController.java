@@ -39,7 +39,6 @@ public class AccessLogController {
     @PostMapping("/validate-qr")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SCANNER')")
     public ResponseEntity<QrValidationResponse> validateQrCode(@RequestBody QrValidationRequest request) {
-        // Validate QR token
         Long userId = qrGeneratorService.validateQrToken(request.getQrToken());
 
         QrValidationResponse response = new QrValidationResponse();
@@ -48,7 +47,6 @@ public class AccessLogController {
             return new ResponseEntity<>(response, HttpStatus.OK);
         }
 
-        // QR is valid, process access
         AccessLog accessLog = accessLogService.processQrScan(
                 request.getQrToken(),
                 request.getZoneId(),
@@ -56,7 +54,6 @@ public class AccessLogController {
                 request.getScannerLocation()
         );
 
-        // Get user details
         User user = userService.findById(userId).orElse(null);
         if (user != null) {
             response.setValid(true);

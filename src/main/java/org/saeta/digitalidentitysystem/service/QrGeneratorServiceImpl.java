@@ -65,7 +65,6 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        // Get or create identity card
         IdentityCard card = identityCardRepository.findByUserId(userId)
                 .orElseGet(() -> {
                     IdentityCard newCard = new IdentityCard();
@@ -78,11 +77,9 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
                     return identityCardRepository.save(newCard);
                 });
 
-        // Current time + expiration time
         Date issuedAt = new Date();
         Date expiryDate = new Date(issuedAt.getTime() + qrExpirationSeconds * 1000);
 
-        // Create token with timestamp to ensure it's unique
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
 
         String token = Jwts.builder()
@@ -90,11 +87,10 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
                 .setIssuedAt(issuedAt)
                 .setExpiration(expiryDate)
                 .claim("cardId", card.getId())
-                .claim("nonce", UUID.randomUUID().toString()) // Add nonce for uniqueness
+                .claim("nonce", UUID.randomUUID().toString())
                 .signWith(key)
                 .compact();
 
-        // Update card with latest QR code information
         card.setLastQrTimestamp(LocalDateTime.now());
         card.setLastQrCode(token);
         identityCardRepository.save(card);
@@ -126,28 +122,25 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
                     .parseClaimsJws(token)
                     .getBody();
 
-            // Extract user ID from token
             String userIdStr = claims.getSubject();
             Long userId = Long.parseLong(userIdStr);
 
-            // Verify the token has not expired
             Date expirationDate = claims.getExpiration();
             if (expirationDate.before(new Date())) {
-                return null; // Token expired
+                return null;
             }
 
-            // Check if card is still active
             Long cardId = claims.get("cardId", Long.class);
             IdentityCard card = identityCardRepository.findById(cardId)
                     .orElse(null);
 
             if (card == null || !card.getIsActive()) {
-                return null; // Card not found or inactive
+                return null;
             }
 
             return userId;
         } catch (Exception e) {
-            return null; // Token invalid
+            return null;
         }
     }
 

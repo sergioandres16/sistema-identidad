@@ -84,17 +84,14 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest registerRequest) {
-        // Check if username exists
         if (userService.existsByUsername(registerRequest.getUsername())) {
             return new ResponseEntity<>("Username is already taken!", HttpStatus.BAD_REQUEST);
         }
 
-        // Check if email exists
         if (userService.existsByEmail(registerRequest.getEmail())) {
             return new ResponseEntity<>("Email is already in use!", HttpStatus.BAD_REQUEST);
         }
 
-        // Create new user
         User user = new User();
         user.setUsername(registerRequest.getUsername());
         user.setPassword(registerRequest.getPassword()); // Will be encoded in service
@@ -103,7 +100,6 @@ public class AuthController {
         user.setEmail(registerRequest.getEmail());
         user.setPhoneNumber(registerRequest.getPhoneNumber());
 
-        // Set student or member attributes if provided
         if (registerRequest.getStudentCode() != null && !registerRequest.getStudentCode().isEmpty()) {
             user.setStudentCode(registerRequest.getStudentCode());
             user.setFaculty(registerRequest.getFaculty());
@@ -112,22 +108,18 @@ public class AuthController {
             user.setHasDebt(false);
         }
 
-        // Set roles
         Set<Role> roles = new HashSet<>();
         Role userRole = roleRepository.findByName("ROLE_USER")
                 .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
         roles.add(userRole);
         user.setRoles(roles);
 
-        // Set active status
         UserStatus activeStatus = userStatusRepository.findByName(UserStatus.ACTIVE)
                 .orElseThrow(() -> new RuntimeException("Error: Status is not found."));
         user.setStatus(activeStatus);
 
-        // Save user
         User savedUser = userService.saveUser(user);
 
-        // Create identity card
         identityCardService.createCard(savedUser.getId());
 
         return new ResponseEntity<>("User registered successfully!", HttpStatus.CREATED);

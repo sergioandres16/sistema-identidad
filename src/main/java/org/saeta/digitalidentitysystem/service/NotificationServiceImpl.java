@@ -129,9 +129,6 @@ public class NotificationServiceImpl implements NotificationService {
         createNotification(userId, title, message, "INFO");
     }
 
-    /**
-     * Convert Notification entity to NotificationDTO
-     */
     private NotificationDTO convertToDTO(Notification notification) {
         NotificationDTO dto = new NotificationDTO();
         dto.setId(notification.getId());

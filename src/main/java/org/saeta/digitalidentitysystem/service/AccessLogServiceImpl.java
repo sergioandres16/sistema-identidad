@@ -48,22 +48,17 @@ public class AccessLogServiceImpl implements AccessLogService {
         this.notificationService = notificationService;
     }
 
-    // ------------------------------------------------------------------------
-    //  MÉTODO MODIFICADO: cambio de estado automático al escanear el QR
-    // ------------------------------------------------------------------------
     @Override
     @Transactional
     public AccessLog processQrScan(String qrToken, Long zoneId,
                                    String scannerId, String scannerLocation) {
 
-        // 1) Validar token → obtener userId
         Long userId = qrGeneratorService.validateQrToken(qrToken);
         if (userId == null) {
             return logAccess(null, zoneId, false, "SCAN",
                     scannerId, scannerLocation, "Invalid or expired QR code");
         }
 
-        // 2) Cargar usuario y estado original
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("User not found with id: " + userId));
@@ -71,11 +66,9 @@ public class AccessLogServiceImpl implements AccessLogService {
         UserStatus originalStatus = user.getStatus();  // puede ser null
         String originalName = originalStatus != null ? originalStatus.getName() : null;
 
-        // 3) Verificaciones de negocio
         boolean accessGranted = true;
         String reasonDenied = null;
 
-        // 3.1) Deuda primero: si tiene deuda lo marcamos (y quizá negamos acceso)
         if (user.getHasDebt() != null && user.getHasDebt()
                 && user.getMembershipType() != null && !user.getMembershipType().isEmpty()) {
 
@@ -92,7 +85,6 @@ public class AccessLogServiceImpl implements AccessLogService {
             reasonDenied = "User has outstanding debt";
         }
 
-        // 3.2) Estado INACTIVE o SUSPENDED
         if (accessGranted && originalStatus != null) {
             String s = originalName;
             if (UserStatus.INACTIVE.equals(s) || UserStatus.SUSPENDED.equals(s)) {
@@ -101,7 +93,6 @@ public class AccessLogServiceImpl implements AccessLogService {
             }
         }
 
-        // 3.3) Permisos de zona y franja horaria
         if (accessGranted && zoneId != null && user.getAccessProfile() != null) {
             boolean hasAccess = user.getAccessProfile().getAllowedZones().stream()
                     .anyMatch(z -> z.getId().equals(zoneId));
@@ -122,13 +113,10 @@ public class AccessLogServiceImpl implements AccessLogService {
             }
         }
 
-        // 4) Reglas de promoción a ACTIVE si todo fue OK
         if (accessGranted) {
-            // 4.1) PENDING -> ACTIVE
             if (UserStatus.PENDING.equals(originalName)) {
                 promoteToActive(user, originalName);
             }
-            // 4.2) EXPIRED -> ACTIVE si renovó
             else if (UserStatus.EXPIRED.equals(originalName)
                     && user.getMembershipExpiry() != null
                     && user.getMembershipExpiry().isAfter(LocalDateTime.now())) {
@@ -136,11 +124,9 @@ public class AccessLogServiceImpl implements AccessLogService {
             }
         }
 
-        // 5) Registrar intento de acceso
         AccessLog accessLog = logAccess(userId, zoneId, accessGranted, "SCAN",
                 scannerId, scannerLocation, reasonDenied);
 
-        // 5.1) Si hubo cambio de estado, reflejarlo en el log
         if (user.getStatus() != null
                 && (originalStatus == null
                 || !user.getStatus().getId().equals(originalStatus.getId()))) {
@@ -149,7 +135,6 @@ public class AccessLogServiceImpl implements AccessLogService {
             accessLog.setUpdatedStatus(user.getStatus().getName());
         }
 
-        // 5.2) Notificar acceso denegado
         if (!accessGranted) {
             notificationService.sendAccessDeniedNotification(
                     userId, accessLog.getId(), reasonDenied);
@@ -158,9 +143,6 @@ public class AccessLogServiceImpl implements AccessLogService {
         return accessLogRepository.save(accessLog);
     }
 
-    // ------------------------------------------------------------------------
-    //  Helpers
-    // ------------------------------------------------------------------------
     private void promoteToActive(User user, String previousStatusName) {
         UserStatus activeStatus = userStatusRepository.findByName(UserStatus.ACTIVE)
                 .orElseThrow(() ->
@@ -217,14 +199,11 @@ public class AccessLogServiceImpl implements AccessLogService {
         UserStatus newStatus = userStatusRepository.findById(newStatusId)
                 .orElseThrow(() -> new ResourceNotFoundException("User status not found with id: " + newStatusId));
 
-        // Record previous status
         String previousStatus = user.getStatus() != null ? user.getStatus().getName() : null;
 
-        // Change user status
         user.setStatus(newStatus);
         userRepository.save(user);
 
-        // Log the status change
         AccessLog accessLog = new AccessLog();
         accessLog.setUser(user);
         accessLog.setZone(zone);
@@ -236,7 +215,6 @@ public class AccessLogServiceImpl implements AccessLogService {
 
         accessLog = accessLogRepository.save(accessLog);
 
-        // Send notification about status change
         notificationService.sendStatusChangeNotification(userId, previousStatus, newStatus.getName());
 
         return accessLog;
@@ -278,9 +256,6 @@ public class AccessLogServiceImpl implements AccessLogService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Convert AccessLog entity to AccessLogDTO
-     */
     private AccessLogDTO convertToDTO(AccessLog log) {
         AccessLogDTO dto = new AccessLogDTO();
         dto.setId(log.getId());
