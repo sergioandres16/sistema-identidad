@@ -45,6 +45,9 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
+    @Value("${frontend.base.url}")
+    private String frontendBaseUrl;
+    
     private final UserRepository userRepository;
     private final IdentityCardRepository identityCardRepository;
 
@@ -82,12 +85,16 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
 
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
 
+        // Add the redirect URL to the token
+        String redirectUrl = frontendBaseUrl + "/scanner?token=";
+
         String token = Jwts.builder()
                 .setSubject(String.valueOf(userId))
                 .setIssuedAt(issuedAt)
                 .setExpiration(expiryDate)
                 .claim("cardId", card.getId())
                 .claim("nonce", UUID.randomUUID().toString())
+                .claim("redirectUrl", redirectUrl)
                 .signWith(key)
                 .compact();
 

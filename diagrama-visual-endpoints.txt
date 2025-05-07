@@ -1,0 +1,83 @@
+# Diagrama Visual de Flujo del Sistema de Identidad Digital
+
+```
++-------------------------------------------------------------------------------------------+
+|                                SISTEMA DE IDENTIDAD DIGITAL                               |
++-------------------------------------------------------------------------------------------+
+
++----------------+        +----------------+        +----------------+        +----------------+
+|  AUTENTICACIÓN |        |    USUARIOS    |        |    TARJETAS    |        |     ACCESO     |
++----------------+        +----------------+        +----------------+        +----------------+
+| /auth/login    | -----> | /users         | <----> | /cards/user/{} | <----> | /access-logs/  |
+| /auth/register | -----> | /users/{id}    | <----> | /cards/{id}    | <----> | validate-qr    |
++----------------+        +----------------+        +----------------+        +----------------+
+        |                        |                        |                        |
+        |                        |                        |                        |
+        v                        v                        v                        v
++-------------------------------------------------------------------------------------------+
+|                                   NOTIFICACIONES                                           |
++-------------------------------------------------------------------------------------------+
+| /notifications/user/{userId}                                                               |
+| /notifications/user/{userId}/unread                                                        |
+| /notifications/user/{userId}/count                                                         |
++-------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------+
+|                                 FLUJO DE INTERACCIÓN                                       |
++-------------------------------------------------------------------------------------------+
+|                                                                                           |
+|  1. REGISTRO/LOGIN                                                                        |
+|     Usuario ---> /auth/register o /auth/login ---> Obtiene token JWT                      |
+|                                                                                           |
+|  2. GESTIÓN DE IDENTIDAD                                                                  |
+|     Admin ---> /users ---> Gestiona usuarios                                              |
+|     Usuario/Admin ---> /cards ---> Gestiona tarjetas de identidad                         |
+|                                                                                           |
+|  3. CONTROL DE ACCESO                                                                     |
+|     Scanner ---> /access-logs/validate-qr ---> Valida acceso                              |
+|     Sistema ---> Registra acceso ---> Genera notificaciones si es necesario               |
+|                                                                                           |
+|  4. MONITOREO                                                                             |
+|     Usuario ---> /notifications ---> Recibe notificaciones                                |
+|     Admin ---> /access-logs ---> Monitorea accesos                                        |
+|                                                                                           |
++-------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------+
+|                                    ROLES DEL SISTEMA                                       |
++-------------------------------------------------------------------------------------------+
+|                                                                                           |
+|  PÚBLICO                    USUARIO (USER)               ADMIN                  SCANNER   |
+|  +-------------+            +-------------+            +-------------+        +----------+|
+|  | - Login     |            | - Ver perfil|            | - Todo      |        | - Validar||
+|  | - Registro  |            | - Ver       |            |             |        |   QR     ||
+|  |             |            |   tarjeta   |            |             |        | - Cambiar||
+|  |             |            | - Renovar QR|            |             |        |   estado ||
+|  +-------------+            +-------------+            +-------------+        +----------+|
+|                                                                                           |
++-------------------------------------------------------------------------------------------+
+```
+
+## Leyenda de Relaciones
+- `---->`: Flujo de datos/control
+- `<---->`: Interacción bidireccional
+
+## Notas sobre el Diagrama
+1. El módulo de **Autenticación** es el punto de entrada al sistema
+2. El módulo de **Usuarios** gestiona toda la información de usuarios
+3. El módulo de **Tarjetas** maneja las tarjetas de identidad y códigos QR
+4. El módulo de **Acceso** controla la validación de accesos y registros
+5. El módulo de **Notificaciones** recibe información de todos los demás módulos
+
+## Flujos Principales
+1. **Registro y Autenticación**: 
+   - Usuario se registra → Sistema crea usuario → Sistema crea tarjeta → Usuario inicia sesión
+
+2. **Control de Acceso**:
+   - Usuario solicita QR → Sistema genera QR → Scanner valida QR → Sistema registra acceso
+
+3. **Gestión Administrativa**:
+   - Admin gestiona usuarios → Admin gestiona tarjetas → Admin monitorea accesos
+
+4. **Notificaciones**:
+   - Sistema genera notificaciones → Usuario recibe notificaciones → Usuario marca como leídas

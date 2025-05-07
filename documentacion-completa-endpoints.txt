@@ -1,0 +1,226 @@
+# Documentación Completa del Sistema de Identidad Digital
+
+## Introducción
+Este documento proporciona una visión general del Sistema de Identidad Digital, detallando todos los endpoints disponibles, sus relaciones y flujos de trabajo. El sistema está diseñado para gestionar identidades digitales, tarjetas con códigos QR y control de acceso a zonas restringidas.
+
+## Arquitectura General
+
+El sistema está organizado en 5 módulos principales:
+
+1. **Autenticación y Registro**: Gestiona el acceso al sistema
+2. **Gestión de Usuarios**: Administra la información de usuarios
+3. **Tarjetas de Identidad**: Maneja las tarjetas y códigos QR
+4. **Control de Acceso**: Valida accesos y registra eventos
+5. **Notificaciones**: Gestiona las comunicaciones con los usuarios
+
+## Diagrama Visual del Sistema
+
+```
++-------------------------------------------------------------------------------------------+
+|                                SISTEMA DE IDENTIDAD DIGITAL                               |
++-------------------------------------------------------------------------------------------+
+
++----------------+        +----------------+        +----------------+        +----------------+
+|  AUTENTICACIÓN |        |    USUARIOS    |        |    TARJETAS    |        |     ACCESO     |
++----------------+        +----------------+        +----------------+        +----------------+
+| /auth/login    | -----> | /users         | <----> | /cards/user/{} | <----> | /access-logs/  |
+| /auth/register | -----> | /users/{id}    | <----> | /cards/{id}    | <----> | validate-qr    |
++----------------+        +----------------+        +----------------+        +----------------+
+        |                        |                        |                        |
+        |                        |                        |                        |
+        v                        v                        v                        v
++-------------------------------------------------------------------------------------------+
+|                                   NOTIFICACIONES                                           |
++-------------------------------------------------------------------------------------------+
+| /notifications/user/{userId}                                                               |
++-------------------------------------------------------------------------------------------+
+```
+
+## Roles del Sistema
+
+- **Público**: Acceso sin autenticación (login, registro)
+- **USER**: Usuario normal del sistema
+- **ADMIN**: Administrador con acceso completo
+- **SCANNER**: Dispositivo o usuario que escanea QRs para control de acceso
+
+## Detalle de Endpoints por Módulo
+
+### 1. Módulo de Autenticación y Registro
+
+#### POST /auth/login
+- **Descripción**: Iniciar sesión y obtener token JWT
+- **Acceso**: Público
+- **Flujo**: Usuario proporciona credenciales → Sistema valida → Devuelve token JWT
+
+#### POST /auth/register
+- **Descripción**: Registrar un nuevo usuario
+- **Acceso**: Público
+- **Flujo**: Usuario proporciona datos → Sistema valida → Crea usuario → Crea tarjeta de identidad
+
+### 2. Módulo de Gestión de Usuarios
+
+#### GET /users
+- **Descripción**: Obtener todos los usuarios
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita lista → Sistema devuelve todos los usuarios
+
+#### GET /users/paginated
+- **Descripción**: Obtener usuarios paginados
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita página → Sistema devuelve usuarios paginados
+
+#### GET /users/{id}
+- **Descripción**: Obtener usuario por ID
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario/Admin solicita datos → Sistema devuelve detalles del usuario
+
+#### POST /users
+- **Descripción**: Crear un nuevo usuario
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin proporciona datos → Sistema crea usuario
+
+#### PUT /users/{id}
+- **Descripción**: Actualizar usuario
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario/Admin proporciona datos → Sistema actualiza usuario
+
+#### DELETE /users/{id}
+- **Descripción**: Eliminar usuario
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita eliminación → Sistema elimina usuario
+
+#### PATCH /users/{id}/status/{statusId}
+- **Descripción**: Cambiar estado de usuario
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita cambio → Sistema actualiza estado
+
+#### POST /users/{id}/roles/{roleName}
+- **Descripción**: Asignar rol a usuario
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita asignación → Sistema asigna rol
+
+#### DELETE /users/{id}/roles/{roleName}
+- **Descripción**: Eliminar rol de usuario
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita eliminación → Sistema elimina rol
+
+### 3. Módulo de Tarjetas de Identidad
+
+#### POST /cards/user/{userId}
+- **Descripción**: Crear tarjeta para un usuario
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita creación → Sistema crea tarjeta
+
+#### GET /cards/{id}
+- **Descripción**: Obtener tarjeta por ID
+- **Acceso**: ADMIN o USER
+- **Flujo**: Usuario/Admin solicita datos → Sistema devuelve detalles de tarjeta
+
+#### GET /cards/user/{userId}
+- **Descripción**: Obtener tarjeta por ID de usuario
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario/Admin solicita datos → Sistema devuelve tarjeta del usuario
+
+#### PUT /cards/{id}
+- **Descripción**: Actualizar tarjeta
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin proporciona datos → Sistema actualiza tarjeta
+
+#### PATCH /cards/{id}/deactivate
+- **Descripción**: Desactivar tarjeta
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita desactivación → Sistema desactiva tarjeta
+
+#### PATCH /cards/{id}/activate
+- **Descripción**: Activar tarjeta
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita activación → Sistema activa tarjeta
+
+#### GET /cards/{id}/renew-qr
+- **Descripción**: Renovar código QR
+- **Acceso**: ADMIN o USER
+- **Flujo**: Usuario/Admin solicita renovación → Sistema genera nuevo QR
+
+#### GET /cards/{id}/validate
+- **Descripción**: Validar tarjeta
+- **Acceso**: ADMIN o SCANNER
+- **Flujo**: Admin/Scanner solicita validación → Sistema valida tarjeta
+
+### 4. Módulo de Control de Acceso
+
+#### POST /access-logs/validate-qr
+- **Descripción**: Validar código QR y registrar acceso
+- **Acceso**: ADMIN o SCANNER
+- **Flujo**: Scanner envía QR → Sistema valida → Registra acceso → Devuelve información de usuario
+
+#### POST /access-logs/change-status
+- **Descripción**: Cambiar estado de usuario durante acceso
+- **Acceso**: ADMIN o SCANNER
+- **Flujo**: Scanner solicita cambio → Sistema actualiza estado → Registra cambio
+
+#### GET /access-logs/user/{userId}
+- **Descripción**: Obtener historial de acceso de usuario
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario/Admin solicita historial → Sistema devuelve registros
+
+#### GET /access-logs/user/{userId}/latest
+- **Descripción**: Obtener último acceso de usuario
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario/Admin solicita último acceso → Sistema devuelve registro
+
+#### GET /access-logs/date-range
+- **Descripción**: Obtener registros de acceso por rango de fechas
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin solicita registros → Sistema devuelve registros filtrados
+
+### 5. Módulo de Notificaciones
+
+#### GET /notifications/user/{userId}/unread
+- **Descripción**: Obtener notificaciones no leídas
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario/Admin solicita notificaciones → Sistema devuelve no leídas
+
+#### GET /notifications/user/{userId}
+- **Descripción**: Obtener todas las notificaciones paginadas
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario/Admin solicita notificaciones → Sistema devuelve paginadas
+
+#### GET /notifications/user/{userId}/count
+- **Descripción**: Obtener cantidad de notificaciones no leídas
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario/Admin solicita conteo → Sistema devuelve cantidad
+
+#### PATCH /notifications/{id}/read
+- **Descripción**: Marcar notificación como leída
+- **Acceso**: ADMIN o USER
+- **Flujo**: Usuario marca notificación → Sistema actualiza estado
+
+#### PATCH /notifications/user/{userId}/read-all
+- **Descripción**: Marcar todas las notificaciones como leídas
+- **Acceso**: ADMIN o el propio usuario
+- **Flujo**: Usuario marca todas → Sistema actualiza estados
+
+#### POST /notifications/user/{userId}
+- **Descripción**: Crear notificación para un usuario
+- **Acceso**: Solo ADMIN
+- **Flujo**: Admin crea notificación → Sistema la envía al usuario
+
+## Flujos Principales del Sistema
+
+### 1. Registro y Autenticación
+- Usuario se registra → Sistema crea usuario → Sistema crea tarjeta → Usuario inicia sesión
+
+### 2. Control de Acceso
+- Usuario solicita QR → Sistema genera QR → Scanner valida QR → Sistema registra acceso
+
+### 3. Gestión Administrativa
+- Admin gestiona usuarios → Admin gestiona tarjetas → Admin monitorea accesos
+
+### 4. Notificaciones
+- Sistema genera notificaciones → Usuario recibe notificaciones → Usuario marca como leídas
+
+## Conclusión
+
+El Sistema de Identidad Digital proporciona una solución completa para la gestión de identidades, control de acceso y monitoreo. Los diferentes módulos trabajan juntos para ofrecer una experiencia segura y eficiente tanto para usuarios como para administradores.
+
+La arquitectura basada en REST API permite una fácil integración con aplicaciones cliente, ya sean aplicaciones web, móviles o dispositivos de escaneo dedicados.

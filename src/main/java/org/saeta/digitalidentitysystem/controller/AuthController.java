@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -100,26 +101,34 @@ public class AuthController {
         user.setEmail(registerRequest.getEmail());
         user.setPhoneNumber(registerRequest.getPhoneNumber());
 
+        // Set student information if provided
         if (registerRequest.getStudentCode() != null && !registerRequest.getStudentCode().isEmpty()) {
             user.setStudentCode(registerRequest.getStudentCode());
             user.setFaculty(registerRequest.getFaculty());
-        } else if (registerRequest.getMembershipType() != null && !registerRequest.getMembershipType().isEmpty()) {
+        }
+        // Set membership information if provided
+        else if (registerRequest.getMembershipType() != null && !registerRequest.getMembershipType().isEmpty()) {
             user.setMembershipType(registerRequest.getMembershipType());
+            // Set membership expiry to 1 year from now
+            user.setMembershipExpiry(LocalDateTime.now().plusYears(1));
             user.setHasDebt(false);
         }
 
+        // Set user role
         Set<Role> roles = new HashSet<>();
         Role userRole = roleRepository.findByName("ROLE_USER")
                 .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
         roles.add(userRole);
         user.setRoles(roles);
 
+        // Set user status to ACTIVE by default
         UserStatus activeStatus = userStatusRepository.findByName(UserStatus.ACTIVE)
                 .orElseThrow(() -> new RuntimeException("Error: Status is not found."));
         user.setStatus(activeStatus);
 
         User savedUser = userService.saveUser(user);
 
+        // Create identity card for the user
         identityCardService.createCard(savedUser.getId());
 
         return new ResponseEntity<>("User registered successfully!", HttpStatus.CREATED);
