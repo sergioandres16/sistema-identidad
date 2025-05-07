@@ -29,7 +29,7 @@ public class WebConfig implements WebMvcConfigurer {
     private long maxAge;
 
     @Bean
-    public CorsConfigurationSource webCorsConfigurationSource() {
+    public CorsConfigurationSource mvcCorsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(Arrays.asList(allowedMethods.split(",")));

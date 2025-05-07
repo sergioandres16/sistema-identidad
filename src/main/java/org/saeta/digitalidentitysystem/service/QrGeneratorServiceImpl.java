@@ -12,7 +12,6 @@ import org.saeta.digitalidentitysystem.repository.IdentityCardRepository;
 import org.saeta.digitalidentitysystem.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.apache.commons.codec.binary.Base64;
@@ -26,7 +25,6 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Date;
 import java.util.UUID;
 
@@ -45,9 +43,12 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    @Value("${frontend.base.url}")
+    @Value("${frontend.base.url:http://192.168.18.45:4200}")
     private String frontendBaseUrl;
-    
+
+    @Value("${qr.redirect.url:http://192.168.18.45:4200/qr-redirect.html?token=}")
+    private String qrRedirectUrl;
+
     private final UserRepository userRepository;
     private final IdentityCardRepository identityCardRepository;
 
@@ -59,8 +60,8 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
 
     @Override
     public BufferedImage generateQrCodeForUser(Long userId) {
-        String token = generateTokenForUser(userId);
-        return generateQrCodeFromString(token);
+        String redirectUrl = generateTokenForUser(userId);
+        return generateQrCodeFromString(redirectUrl);
     }
 
     @Override
@@ -85,24 +86,22 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
 
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
 
-        // Add the redirect URL to the token
-        String redirectUrl = frontendBaseUrl + "/scanner?token=";
-
         String token = Jwts.builder()
                 .setSubject(String.valueOf(userId))
                 .setIssuedAt(issuedAt)
                 .setExpiration(expiryDate)
                 .claim("cardId", card.getId())
                 .claim("nonce", UUID.randomUUID().toString())
-                .claim("redirectUrl", redirectUrl)
                 .signWith(key)
                 .compact();
+
+        String redirectUrl = qrRedirectUrl + token;
 
         card.setLastQrTimestamp(LocalDateTime.now());
         card.setLastQrCode(token);
         identityCardRepository.save(card);
 
-        return token;
+        return redirectUrl;
     }
 
     @Override
