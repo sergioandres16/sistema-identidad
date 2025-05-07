@@ -121,10 +121,10 @@ public class AuthController {
         roles.add(userRole);
         user.setRoles(roles);
 
-        // Set user status to ACTIVE by default
-        UserStatus activeStatus = userStatusRepository.findByName(UserStatus.ACTIVE)
+        // CAMBIO IMPORTANTE: Set user status to INACTIVE by default instead of ACTIVE
+        UserStatus inactiveStatus = userStatusRepository.findByName(UserStatus.INACTIVE)
                 .orElseThrow(() -> new RuntimeException("Error: Status is not found."));
-        user.setStatus(activeStatus);
+        user.setStatus(inactiveStatus);
 
         User savedUser = userService.saveUser(user);
 

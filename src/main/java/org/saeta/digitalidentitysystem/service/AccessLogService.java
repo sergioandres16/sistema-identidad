@@ -25,4 +25,6 @@ public interface AccessLogService {
     AccessLogDTO getLatestAccessForUser(Long userId);
 
     List<AccessLogDTO> getUserAccessHistory(Long userId, int limit);
+
+    AccessLog activateUserCard(Long userId, Long zoneId, String scannerId, String scannerLocation);
 }

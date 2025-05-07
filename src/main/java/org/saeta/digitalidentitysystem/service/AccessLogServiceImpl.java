@@ -3,14 +3,17 @@ package org.saeta.digitalidentitysystem.service;
 import org.saeta.digitalidentitysystem.dto.AccessLogDTO;
 import org.saeta.digitalidentitysystem.entity.AccessLog;
 import org.saeta.digitalidentitysystem.entity.AccessZone;
+import org.saeta.digitalidentitysystem.entity.IdentityCard;
 import org.saeta.digitalidentitysystem.entity.User;
 import org.saeta.digitalidentitysystem.entity.UserStatus;
 import org.saeta.digitalidentitysystem.exception.ResourceNotFoundException;
 import org.saeta.digitalidentitysystem.repository.AccessLogRepository;
 import org.saeta.digitalidentitysystem.repository.AccessZoneRepository;
+import org.saeta.digitalidentitysystem.repository.IdentityCardRepository;
 import org.saeta.digitalidentitysystem.repository.UserRepository;
 import org.saeta.digitalidentitysystem.repository.UserStatusRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -29,8 +32,12 @@ public class AccessLogServiceImpl implements AccessLogService {
     private final UserRepository userRepository;
     private final AccessZoneRepository accessZoneRepository;
     private final UserStatusRepository userStatusRepository;
+    private final IdentityCardRepository identityCardRepository;
     private final QrGeneratorService qrGeneratorService;
     private final NotificationService notificationService;
+
+    @Value("${card.activation.duration.hours:8}")  // Inyectando la duración de activación desde las propiedades
+    private int cardActivationDurationHours;
 
     @Autowired
     public AccessLogServiceImpl(
@@ -38,12 +45,14 @@ public class AccessLogServiceImpl implements AccessLogService {
             UserRepository userRepository,
             AccessZoneRepository accessZoneRepository,
             UserStatusRepository userStatusRepository,
+            IdentityCardRepository identityCardRepository,
             QrGeneratorService qrGeneratorService,
             NotificationService notificationService) {
         this.accessLogRepository = accessLogRepository;
         this.userRepository = userRepository;
         this.accessZoneRepository = accessZoneRepository;
         this.userStatusRepository = userStatusRepository;
+        this.identityCardRepository = identityCardRepository;
         this.qrGeneratorService = qrGeneratorService;
         this.notificationService = notificationService;
     }
@@ -116,8 +125,7 @@ public class AccessLogServiceImpl implements AccessLogService {
         if (accessGranted) {
             if (UserStatus.PENDING.equals(originalName)) {
                 promoteToActive(user, originalName);
-            }
-            else if (UserStatus.EXPIRED.equals(originalName)
+            } else if (UserStatus.EXPIRED.equals(originalName)
                     && user.getMembershipExpiry() != null
                     && user.getMembershipExpiry().isAfter(LocalDateTime.now())) {
                 promoteToActive(user, originalName);
@@ -151,6 +159,40 @@ public class AccessLogServiceImpl implements AccessLogService {
         userRepository.save(user);
         notificationService.sendStatusChangeNotification(
                 user.getId(), previousStatusName, UserStatus.ACTIVE);
+    }
+
+    @Override
+    @Transactional
+    public AccessLog activateUserCard(Long userId, Long zoneId, String scannerId, String scannerLocation) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        UserStatus originalStatus = user.getStatus();
+        String originalName = originalStatus != null ? originalStatus.getName() : null;
+
+        UserStatus activeStatus = userStatusRepository.findByName(UserStatus.ACTIVE)
+                .orElseThrow(() -> new ResourceNotFoundException("Status ACTIVE not found"));
+        user.setStatus(activeStatus);
+
+        identityCardRepository.findByUserId(userId).ifPresent(card -> {
+            card.setIsActive(true);
+            // Usar la propiedad de configuración para la duración
+            card.setExpiryDate(LocalDateTime.now().plusHours(cardActivationDurationHours));
+            identityCardRepository.save(card);
+        });
+
+        userRepository.save(user);
+
+        AccessLog accessLog = logAccess(userId, zoneId, true, "ACTIVATION",
+                scannerId, scannerLocation, null);
+
+        accessLog.setPreviousStatus(originalName);
+        accessLog.setUpdatedStatus(UserStatus.ACTIVE);
+
+        notificationService.sendStatusChangeNotification(
+                userId, originalName, UserStatus.ACTIVE);
+
+        return accessLogRepository.save(accessLog);
     }
 
     @Override

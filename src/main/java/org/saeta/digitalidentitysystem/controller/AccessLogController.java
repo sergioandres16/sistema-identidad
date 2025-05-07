@@ -80,6 +80,44 @@ public class AccessLogController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
+    // NUEVO ENDPOINT: Activar carnet manualmente por un admin o scanner
+    @PostMapping("/activate-card")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SCANNER')")
+    public ResponseEntity<QrValidationResponse> activateUserCard(
+            @RequestParam Long userId,
+            @RequestParam Long zoneId,
+            @RequestParam String scannerId,
+            @RequestParam String scannerLocation) {
+
+        AccessLog accessLog = accessLogService.activateUserCard(userId, zoneId, scannerId, scannerLocation);
+
+        User user = userService.findById(userId).orElse(null);
+        QrValidationResponse response = new QrValidationResponse();
+
+        if (user != null) {
+            response.setValid(true);
+            response.setUserId(userId);
+            response.setUserName(user.getFirstName() + " " + user.getLastName());
+
+            if (user.getStatus() != null) {
+                response.setUserStatus(user.getStatus().getName());
+                response.setStatusColor(user.getStatus().getStatusColor());
+            }
+
+            if (user.getRoles() != null && !user.getRoles().isEmpty()) {
+                response.setUserRole(user.getRoles().iterator().next().getName());
+            }
+
+            response.setProfilePhoto(user.getProfilePhoto());
+            response.setAccessGranted(true);
+            response.setLogId(accessLog.getId());
+        } else {
+            response.setValid(false);
+        }
+
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
     @PostMapping("/change-status")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SCANNER')")
     public ResponseEntity<AccessLog> changeUserStatusOnAccess(

@@ -37,7 +37,7 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
     @Value("${qr.height}")
     private int qrHeight;
 
-    @Value("${qr.expiration.seconds}")
+    @Value("${qr.expiration.seconds:30}") // Default QR expiration (8 hours)
     private int qrExpirationSeconds;
 
     @Value("${jwt.secret}")
@@ -48,6 +48,10 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
 
     @Value("${qr.redirect.url:http://192.168.18.45:4200/qr-redirect.html?token=}")
     private String qrRedirectUrl;
+
+    // NUEVO: duración de la habilitación del carnet (8 horas por defecto)
+    @Value("${card.activation.duration.hours:8}")
+    private int cardActivationDurationHours;
 
     private final UserRepository userRepository;
     private final IdentityCardRepository identityCardRepository;
@@ -75,14 +79,15 @@ public class QrGeneratorServiceImpl implements QrGeneratorService {
                     newCard.setUser(user);
                     newCard.setCardNumber(UUID.randomUUID().toString());
                     newCard.setIssueDate(LocalDateTime.now());
-                    newCard.setExpiryDate(LocalDateTime.now().plusYears(1));
+                    // Cambiado: expiración a 8 horas
+                    newCard.setExpiryDate(LocalDateTime.now().plusHours(cardActivationDurationHours));  // Activación del carnet
                     newCard.setQrSecret(UUID.randomUUID().toString());
-                    newCard.setIsActive(true);
+                    newCard.setIsActive(false);  // Comienza desactivado
                     return identityCardRepository.save(newCard);
                 });
 
         Date issuedAt = new Date();
-        Date expiryDate = new Date(issuedAt.getTime() + qrExpirationSeconds * 1000);
+        Date expiryDate = new Date(issuedAt.getTime() + qrExpirationSeconds * 1000); // Expiración del QR token
 
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
 

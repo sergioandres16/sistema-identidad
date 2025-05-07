@@ -49,9 +49,12 @@ public class IdentityCardServiceImpl implements IdentityCardService {
         card.setUser(user);
         card.setCardNumber(generateUniqueCardNumber());
         card.setIssueDate(LocalDateTime.now());
-        card.setExpiryDate(LocalDateTime.now().plusYears(1)); // Default 1 year validity
+        // Configurar expiración a 8 horas en lugar de 1 año
+        card.setExpiryDate(LocalDateTime.now().plusHours(8));
         card.setQrSecret(UUID.randomUUID().toString());
-        card.setIsActive(true);
+
+        // CAMBIO IMPORTANTE: Iniciar con el carnet deshabilitado
+        card.setIsActive(false);
 
         return identityCardRepository.save(card);
     }
